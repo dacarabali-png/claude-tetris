@@ -82,6 +82,9 @@ jobs:
 
             ## 3. Publicar el diagnóstico (en español, como el resto del proyecto)
 
+            El comentario debe estar escrito en formato Markdown válido, del tipo que
+            GitHub renderiza correctamente en issues (encabezados con `#`, listas con
+            `-`, bloques de código con ``` y rutas/identificadores entre backticks).
             Usa exactamente esta estructura (Markdown), rellenando cada sección con
             información real y específica del issue:
 
