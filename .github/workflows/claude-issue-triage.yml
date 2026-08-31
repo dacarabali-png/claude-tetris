@@ -1,0 +1,130 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+concurrency:
+  group: issue-triage-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    # Los eventos "issues" también se disparan para pull requests; hay que excluirlos.
+    # En "edited" solo re-analizamos si cambió el cuerpo (no si solo se corrigió el
+    # título), y solo para autores de confianza, porque el repo es público y cada
+    # ejecución consume cuota de Claude.
+    if: |
+      github.event.issue.pull_request == null &&
+      (github.event.action == 'opened' || github.event.changes.body != null) &&
+      github.event.sender.type != 'Bot' &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association)
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read   # checkout del código para diagnosticar
+      issues: write    # etiquetar y comentar (el default del repo es "read")
+      id-token: write  # igual que los workflows existentes de Claude
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Issue Triage
+        id: claude-triage
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: >-
+            --allowedTools "Read,Grep,Glob,Write,Bash(gh label list:*),Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh issue comment:*),Bash(gh api:*)"
+          prompt: |
+            Eres un asistente de triage para el issue #${{ github.event.issue.number }}
+            del repositorio ${{ github.repository }} (un juego de Tetris en JavaScript
+            vanilla, sin build ni tests automatizados). Tu trabajo tiene dos partes:
+            asignar las etiquetas apropiadas y publicar un diagnóstico técnico que le
+            sirva a otra persona (o a ti mismo en una sesión futura) para implementar la
+            solución directamente, sin tener que re-investigar el problema.
+
+            ## 1. Reunir contexto
+
+            - Lee el issue: `gh issue view ${{ github.event.issue.number }} --json
+              title,body,labels,comments`.
+            - Lee `CLAUDE.md` y `README.md` en la raíz del repo para entender las
+              convenciones e invariantes del proyecto (especialmente las invariantes
+              que cruzan archivos: tipo de pieza == índice de color == valor de celda en
+              `board`; el tamaño del canvas debe igualar `COLS*BLOCK` x `ROWS*BLOCK`; el
+              preview de la siguiente pieza asume una grilla 4x4 a 30px; `togglePause()`
+              debe resetear `lastTime`).
+            - Investiga el código real relevante (`game.js`, `index.html`, `style.css`)
+              con las herramientas Read/Grep/Glob. NO especules: toda afirmación sobre
+              causa raíz debe poder señalar un archivo y una línea concretos.
+
+            ## 2. Etiquetar
+
+            - Obtén las etiquetas que existen de verdad con
+              `gh label list --json name,description`. Elige ÚNICAMENTE entre esas
+              etiquetas (no inventes ni crees etiquetas nuevas).
+            - Selecciona: un tipo (p. ej. `bug`, `enhancement`, `documentation`,
+              `question`, `accessibility`), un área si aplica (`area:gameplay`,
+              `area:rendering`, `area:ui`, `area:controls`, `area:scoring`,
+              `area:build`), y una prioridad (`prioridad:alta`, `prioridad:media`,
+              `prioridad:baja`). Añade `needs-info` si el issue no tiene información
+              suficiente para diagnosticar con confianza.
+            - Aplica las etiquetas con
+              `gh issue edit ${{ github.event.issue.number }} --add-label "a,b,c"`.
+              No elimines etiquetas que ya haya puesto una persona.
+
+            ## 3. Publicar el diagnóstico (en español, como el resto del proyecto)
+
+            Usa exactamente esta estructura (Markdown), rellenando cada sección con
+            información real y específica del issue:
+
+            ```
+            <!-- claude-triage -->
+            ## 🔎 Diagnóstico automático
+
+            **Resumen:** (1-2 frases de qué reporta el issue)
+
+            **Clasificación:** tipo / área / prioridad elegidos, y por qué
+
+            **Causa raíz probable:** (con referencias archivo:línea reales)
+
+            **Archivos afectados:**
+            - `ruta/archivo.js:NN` — qué hay ahí y por qué es relevante
+
+            **Invariantes en riesgo (CLAUDE.md):** (o "ninguna" si no aplica)
+
+            **Enfoque propuesto:** (pasos concretos para implementar la solución)
+
+            **Complejidad estimada:** baja / media / alta
+
+            **Información faltante:** (o "ninguna")
+
+            ---
+            <sub>Generado automáticamente por Claude. Verificar antes de implementar.</sub>
+            ```
+
+            IMPORTANTE — evitar comentarios duplicados: este workflow corre tanto al
+            crear el issue como al editarlo. Antes de comentar, busca si ya existe un
+            comentario tuyo anterior con el marcador `<!-- claude-triage -->`:
+
+            ```bash
+            gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }}/comments \
+              --jq '.[] | select(.body | contains("<!-- claude-triage -->")) | .id'
+            ```
+
+            - Si ya existe un ID, escribe el nuevo diagnóstico en un archivo temporal
+              (usa la herramienta Write, no heredocs de shell, para no pelear con el
+              escaping de Markdown multilínea) y actualiza ESE comentario con:
+              `gh api -X PATCH repos/${{ github.repository }}/issues/comments/<ID> -f body=@archivo.md`.
+            - Si no existe, publica uno nuevo con:
+              `gh issue comment ${{ github.event.issue.number }} --body-file archivo.md`.
+
+            En ambos casos debe quedar UN SOLO comentario de diagnóstico en el issue,
+            nunca varios.
