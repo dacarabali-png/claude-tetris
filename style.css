@@ -46,6 +46,35 @@ body.light-theme {
   --restart-hover: #5c7cf0;
 }
 
+/* ---- Skins ----
+   Placed after the light-theme block: when both a theme class and a skin
+   class are on <body>, custom-property overrides have equal specificity, so
+   whichever block appears later in the stylesheet wins. Skins must win here
+   so their canvas colors aren't reverted by the light/dark theme. */
+body.skin-neon {
+  --panel-bg: #05050a;
+  --grid-color: #10202a;
+  --block-highlight: rgba(0, 229, 255, 0.25);
+}
+
+body.skin-neon #board,
+body.skin-neon #next-canvas {
+  border-color: #0ff3;
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.35), 0 0 40px rgba(0, 0, 0, 0.6);
+}
+
+body.skin-pastel {
+  --panel-bg: #fdf6f0;
+  --grid-color: #ece3f0;
+  --block-highlight: rgba(255, 255, 255, 0.55);
+}
+
+body.skin-pixel {
+  --panel-bg: #12121a;
+  --grid-color: #2a2a3a;
+  --block-highlight: rgba(255, 255, 255, 0.15);
+}
+
 body {
   background: var(--bg-color);
   color: var(--text-color);
@@ -120,6 +149,17 @@ body {
   border: 1px solid var(--panel-border);
   background: var(--panel-bg);
   border-radius: 4px;
+}
+
+#skin-select {
+  background: var(--kbd-bg);
+  color: var(--text-color);
+  border: 1px solid var(--kbd-border);
+  border-radius: 4px;
+  padding: 5px 6px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 /* ---- Toggle de tema ---- */
