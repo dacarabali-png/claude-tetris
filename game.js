@@ -30,6 +30,46 @@ const PIECES = [
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
 
+// Each skin owns a 9-entry color table parallel to COLORS (index 0 null,
+// indices 1-8 matching the existing piece-type-to-color assignment) plus
+// drawBlock() dispatches on the active skin to render it distinctly.
+// retro/pixel intentionally use copies of the original palette (same color
+// identity per piece type, just re-skinned via a different render style).
+const SKINS = {
+  retro: {
+    colors: [...COLORS],
+  },
+  neon: {
+    colors: [
+      null,
+      '#00e5ff', // I
+      '#ffee00', // O
+      '#e040fb', // T
+      '#00e676', // S
+      '#ff1744', // Z
+      '#2979ff', // J
+      '#ff9100', // L
+      '#eceff1', // N
+    ],
+  },
+  pastel: {
+    colors: [
+      null,
+      '#a8dadc', // I
+      '#fff3b0', // O
+      '#d8bfd8', // T
+      '#b8e0c8', // S
+      '#f4a9a8', // Z
+      '#b8d4f0', // J
+      '#f6c99f', // L
+      '#d6d9e0', // N
+    ],
+  },
+  pixel: {
+    colors: [...COLORS],
+  },
+};
+
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const nextCanvas = document.getElementById('next-canvas');
@@ -42,10 +82,12 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggle = document.getElementById('theme-toggle');
+const skinSelect = document.getElementById('skin-select');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
-// Theme preference, not game state: intentionally left out of init()'s reset so it survives restarts.
+// Theme and skin preferences, not game state: intentionally left out of init()'s reset so they survive restarts.
 let gridColor, blockHighlight;
+let activeSkin = 'retro';
 
 function readThemeColors() {
   const style = getComputedStyle(document.body);
@@ -57,6 +99,33 @@ function setTheme(isLight) {
   document.body.classList.toggle('light-theme', isLight);
   localStorage.setItem('tetris-light-theme', isLight ? '1' : '0');
   readThemeColors();
+}
+
+function setSkin(skinName) {
+  activeSkin = SKINS[skinName] ? skinName : 'retro';
+  document.body.classList.remove('skin-neon', 'skin-pastel', 'skin-pixel');
+  if (activeSkin !== 'retro') {
+    document.body.classList.add(`skin-${activeSkin}`);
+  }
+  localStorage.setItem('tetris-skin', activeSkin);
+  // Skin CSS classes change --grid-color/--block-highlight, so the cached
+  // values must be refreshed or the canvas keeps using stale colors.
+  readThemeColors();
+  draw();
+  drawNext();
+}
+
+// Lightens (positive percent) or darkens (negative percent) a '#rrggbb' color.
+function shadeColor(hex, percent) {
+  const num = parseInt(hex.slice(1), 16);
+  const amt = Math.round(2.55 * percent);
+  let r = (num >> 16) + amt;
+  let g = ((num >> 8) & 0x00ff) + amt;
+  let b = (num & 0x0000ff) + amt;
+  r = Math.max(0, Math.min(255, r));
+  g = Math.max(0, Math.min(255, g));
+  b = Math.max(0, Math.min(255, b));
+  return '#' + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1);
 }
 
 function createBoard() {
@@ -175,13 +244,69 @@ function updateHUD() {
 
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
-  const color = COLORS[colorIndex];
+  const skin = SKINS[activeSkin] || SKINS.retro;
+  const color = skin.colors[colorIndex];
+  const px = x * size + 1;
+  const py = y * size + 1;
+  const w = size - 2;
+  const h = size - 2;
+
   context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = blockHighlight;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+
+  switch (activeSkin) {
+    case 'neon':
+      context.shadowBlur = 12;
+      context.shadowColor = color;
+      context.fillStyle = color;
+      context.fillRect(px, py, w, h);
+      // Reset shadow state immediately so the glow doesn't leak into the
+      // next thing drawn on this canvas (grid lines, the next block, etc).
+      context.shadowBlur = 0;
+      context.shadowColor = 'transparent';
+      context.fillStyle = blockHighlight;
+      context.fillRect(px, py, w, Math.min(4, h));
+      break;
+
+    case 'pastel': {
+      const radius = Math.max(2, size * 0.18);
+      context.fillStyle = color;
+      if (typeof context.roundRect === 'function') {
+        context.beginPath();
+        context.roundRect(px, py, w, h, radius);
+        context.fill();
+      } else {
+        // Fallback for engines without roundRect support.
+        context.fillRect(px, py, w, h);
+      }
+      context.fillStyle = blockHighlight;
+      context.fillRect(px, py, w, Math.min(4, h));
+      break;
+    }
+
+    case 'pixel': {
+      const dark = shadeColor(color, -20);
+      const light = shadeColor(color, 20);
+      const halfW = w / 2;
+      const halfH = h / 2;
+      context.fillStyle = color;
+      context.fillRect(px, py, w, h);
+      // 2x2 checkerboard sub-pattern for a pixel-art feel.
+      context.fillStyle = dark;
+      context.fillRect(px, py, halfW, halfH);
+      context.fillRect(px + halfW, py + halfH, halfW, halfH);
+      context.fillStyle = light;
+      context.fillRect(px + halfW, py, halfW, halfH);
+      context.fillRect(px, py + halfH, halfW, halfH);
+      break;
+    }
+
+    default: // retro
+      context.fillStyle = color;
+      context.fillRect(px, py, w, h);
+      context.fillStyle = blockHighlight;
+      context.fillRect(px, py, w, 4);
+  }
+
   context.globalAlpha = 1;
 }
 
@@ -203,6 +328,7 @@ function drawGrid() {
 }
 
 function draw() {
+  if (!board || !current) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawGrid();
 
@@ -227,6 +353,7 @@ function draw() {
 }
 
 function drawNext() {
+  if (!next) return;
   const NB = 30;
   nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
   const shape = next.shape;
@@ -328,5 +455,11 @@ themeToggle.addEventListener('change', () => setTheme(themeToggle.checked));
 const savedLightTheme = localStorage.getItem('tetris-light-theme') === '1';
 themeToggle.checked = savedLightTheme;
 setTheme(savedLightTheme);
+
+skinSelect.addEventListener('change', () => setSkin(skinSelect.value));
+
+const savedSkin = localStorage.getItem('tetris-skin') || 'retro';
+skinSelect.value = savedSkin;
+setSkin(savedSkin);
 
 init();
