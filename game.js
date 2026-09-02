@@ -42,10 +42,26 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggle = document.getElementById('theme-toggle');
+const viewGameOver = document.getElementById('view-gameover');
+const viewPause = document.getElementById('view-pause');
+const viewControls = document.getElementById('view-controls');
+const resumeBtn = document.getElementById('resume-btn');
+const pauseRestartBtn = document.getElementById('pause-restart-btn');
+const viewControlsBtn = document.getElementById('view-controls-btn');
+const backBtn = document.getElementById('back-btn');
+const startLevelSelect = document.getElementById('start-level-select');
 
-let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId, gameStartLevel;
 // Theme preference, not game state: intentionally left out of init()'s reset so it survives restarts.
 let gridColor, blockHighlight;
+// Starting level preference, not game state: intentionally left out of init()'s reset so it survives restarts.
+// (gameStartLevel above is the per-game snapshot of this preference taken at init() time, so
+// changing "Nivel inicial" mid-game and hitting "Reanudar" doesn't retroactively alter the running game.)
+let startLevel;
+
+function dropIntervalForLevel(lvl) {
+  return Math.max(100, 1000 - (lvl - 1) * 90);
+}
 
 function readThemeColors() {
   const style = getComputedStyle(document.body);
@@ -123,8 +139,8 @@ function clearLines() {
   if (cleared) {
     lines += cleared;
     score += (LINE_SCORES[cleared] || 0) * level;
-    level = Math.floor(lines / 10) + 1;
-    dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    level = gameStartLevel + Math.floor(lines / 10);
+    dropInterval = dropIntervalForLevel(level);
     updateHUD();
   }
 }
@@ -237,12 +253,18 @@ function drawNext() {
       drawBlock(nextCtx, offX + c, offY + r, shape[r][c], NB);
 }
 
+function showOverlayView(view) {
+  document.querySelectorAll('.overlay-view').forEach(v => v.classList.add('hidden'));
+  view.classList.remove('hidden');
+}
+
 function endGame() {
   gameOver = true;
   cancelAnimationFrame(animId);
   animId = null;
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
+  showOverlayView(viewGameOver);
   overlay.classList.remove('hidden');
 }
 
@@ -250,12 +272,12 @@ function togglePause() {
   if (gameOver) return;
   paused = !paused;
   if (!paused) {
+    overlay.classList.add('hidden');
     lastTime = performance.now();
     loop(lastTime);
   } else {
     cancelAnimationFrame(animId);
-    overlayTitle.textContent = 'PAUSA';
-    overlayScore.textContent = '';
+    showOverlayView(viewPause);
     overlay.classList.remove('hidden');
   }
 }
@@ -282,10 +304,11 @@ function init() {
   board = createBoard();
   score = 0;
   lines = 0;
-  level = 1;
+  gameStartLevel = startLevel;
+  level = gameStartLevel;
   paused = false;
   gameOver = false;
-  dropInterval = 1000;
+  dropInterval = dropIntervalForLevel(level);
   dropAccum = 0;
   lastTime = performance.now();
   next = randomPiece();
@@ -297,7 +320,11 @@ function init() {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.code === 'KeyP') { togglePause(); return; }
+  if (e.code === 'Escape' && paused && !viewControls.classList.contains('hidden')) {
+    showOverlayView(viewPause);
+    return;
+  }
+  if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
     case 'ArrowLeft':
@@ -323,10 +350,40 @@ document.addEventListener('keydown', e => {
 
 restartBtn.addEventListener('click', init);
 
+resumeBtn.addEventListener('click', () => {
+  togglePause();
+  resumeBtn.blur();
+});
+
+pauseRestartBtn.addEventListener('click', () => {
+  init();
+  pauseRestartBtn.blur();
+});
+
+viewControlsBtn.addEventListener('click', () => {
+  showOverlayView(viewControls);
+  viewControlsBtn.blur();
+});
+
+backBtn.addEventListener('click', () => {
+  showOverlayView(viewPause);
+  backBtn.blur();
+});
+
+startLevelSelect.addEventListener('change', () => {
+  startLevel = parseInt(startLevelSelect.value, 10);
+  localStorage.setItem('tetris-start-level', String(startLevel));
+  startLevelSelect.blur();
+});
+
 themeToggle.addEventListener('change', () => setTheme(themeToggle.checked));
 
 const savedLightTheme = localStorage.getItem('tetris-light-theme') === '1';
 themeToggle.checked = savedLightTheme;
 setTheme(savedLightTheme);
+
+const parsedStartLevel = parseInt(localStorage.getItem('tetris-start-level'), 10);
+startLevel = Number.isInteger(parsedStartLevel) && parsedStartLevel >= 1 && parsedStartLevel <= 15 ? parsedStartLevel : 1;
+startLevelSelect.value = String(startLevel);
 
 init();
