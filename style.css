@@ -212,3 +212,155 @@ kbd {
 #restart-btn:hover {
   background: var(--restart-hover);
 }
+
+#start-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 6px;
+  color: var(--title-color);
+}
+
+/* ---- Records / highscores ---- */
+.records-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 260px;
+}
+
+.records-stats {
+  display: flex;
+  justify-content: space-around;
+  gap: 12px;
+}
+
+.records-stats > span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.records-stats .value {
+  font-size: 18px;
+}
+
+.records-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 12px;
+}
+
+.records-table td {
+  padding: 3px 6px;
+  color: var(--control-text);
+  text-align: left;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.records-table td.rank-cell {
+  color: var(--label-color);
+  width: 1.5em;
+}
+
+.records-table td.score-cell {
+  color: var(--value-color);
+  text-align: right;
+  font-weight: 700;
+}
+
+.records-table tr.empty-row td {
+  text-align: center;
+  color: var(--label-color);
+  font-style: italic;
+}
+
+.records-table tr.new-record {
+  outline: 1px solid var(--restart-bg);
+}
+
+.records-table tr.new-record td {
+  color: var(--value-color);
+  font-weight: 700;
+}
+
+.name-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.name-entry.hidden {
+  display: none;
+}
+
+.name-entry-label {
+  font-size: 13px;
+  color: var(--control-text);
+}
+
+#name-input {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  color: var(--text-color);
+  text-align: center;
+  width: 160px;
+}
+
+#save-score-btn {
+  background: var(--restart-bg);
+  color: var(--restart-text);
+  border: none;
+  border-radius: 6px;
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+
+#save-score-btn:hover {
+  background: var(--restart-hover);
+}
+
+.reset-records-btn {
+  margin-top: 4px;
+  background: transparent;
+  color: var(--control-text);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-size: 12px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.reset-records-btn:hover {
+  background: var(--kbd-bg);
+  color: var(--text-color);
+}
+
+#play-btn {
+  margin-top: 4px;
+  background: var(--restart-bg);
+  color: var(--restart-text);
+  border: none;
+  border-radius: 6px;
+  padding: 10px 28px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: background 0.15s;
+}
+
+#play-btn:hover {
+  background: var(--restart-hover);
+}
